@@ -2,6 +2,7 @@
 
 #include "Common/CommonTypes.h"
 #include "Core/PowerPC/CachedInterpreter/InterpreterBlockCache.h"
+#include "Core/PowerPC/Interpreter/Interpreter.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 
 class ThreadedInterpreter : public JitBase {
@@ -33,4 +34,7 @@ private:
 
   BlockCache block_cache;
   std::vector<Inst> inst;
+
+  std::vector<std::pair<Interpreter::Instruction,
+                        void (*)(const Inst*, ThreadedInterpreter&, Interpreter&)>> direct;
 };

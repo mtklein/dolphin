@@ -3,14 +3,14 @@
 #include "Core/CoreTiming.h"
 #include "Core/HLE/HLE.h"
 #include "Core/PowerPC/Jit64Common/Jit64Constants.h"
-#include "Core/PowerPC/Interpreter/Interpreter.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/HW/CPU.h"
 #include "Core/System.h"
 
 struct ThreadedInterpreter::Inst {
-    void (*fn)(const Inst[], ThreadedInterpreter&, Interpreter&);
+    void     (*fn)(const Inst[], ThreadedInterpreter&, Interpreter&);
     uintptr_t data;
+    Interpreter::Instruction thunk;
 
     static void Return(const Inst[], ThreadedInterpreter&, Interpreter&) {
         return;
@@ -29,13 +29,14 @@ struct ThreadedInterpreter::Inst {
         next;
     }
 
-    static void HLEFunction(const Inst inst[], ThreadedInterpreter& ti, Interpreter& i) {
-        Interpreter::HLEFunction(i, inst->data);
+    template <void (*callback)(Interpreter&, UGeckoInstruction)>
+    static void Direct(const Inst inst[], ThreadedInterpreter& ti, Interpreter& i) {
+        callback(i, inst->data);
         next;
     }
 
-    static void Interp(const Inst inst[], ThreadedInterpreter& ti, Interpreter& i) {
-        Interpreter::RunInterpreterOp(i, inst->data);
+    static void Indirect(const Inst inst[], ThreadedInterpreter& ti, Interpreter& i) {
+        inst->thunk(i, inst->data);
         next;
     }
 
@@ -100,12 +101,107 @@ struct ThreadedInterpreter::Inst {
         next;
     }
 
-
 #undef next
+
+    template <void fn(Interpreter&, UGeckoInstruction)>
+    static auto pair() {
+        return std::pair(fn, &ThreadedInterpreter::Inst::Direct<fn>);
+    };
 };
 
 ThreadedInterpreter::ThreadedInterpreter(Core::System& system)
-    : JitBase(system), block_cache(*this) {}
+    : JitBase(system), block_cache(*this) {
+
+    direct = std::vector({
+            Inst::pair<Interpreter::bcx>(),
+            Inst::pair<Interpreter::bx>(),
+            Inst::pair<Interpreter::bcx>(),
+            Inst::pair<Interpreter::bcctrx>(),
+            Inst::pair<Interpreter::bclrx>(),
+            Inst::pair<Interpreter::sc>(),
+            Inst::pair<Interpreter::faddsx>(),
+            Inst::pair<Interpreter::fdivsx>(),
+            Inst::pair<Interpreter::fmaddsx>(),
+            Inst::pair<Interpreter::fmsubsx>(),
+            Inst::pair<Interpreter::fmulsx>(),
+            Inst::pair<Interpreter::fnmaddsx>(),
+            Inst::pair<Interpreter::fnmsubsx>(),
+            Inst::pair<Interpreter::fresx>(),
+            Inst::pair<Interpreter::fsubsx>(),
+            Inst::pair<Interpreter::fabsx>(),
+            Inst::pair<Interpreter::fcmpo>(),
+            Inst::pair<Interpreter::fcmpu>(),
+            Inst::pair<Interpreter::fctiwx>(),
+            Inst::pair<Interpreter::fctiwzx>(),
+            Inst::pair<Interpreter::fmrx>(),
+            Inst::pair<Interpreter::fnabsx>(),
+            Inst::pair<Interpreter::fnegx>(),
+            Inst::pair<Interpreter::frspx>(),
+            Inst::pair<Interpreter::faddx>(),
+            Inst::pair<Interpreter::fdivx>(),
+            Inst::pair<Interpreter::fmaddx>(),
+            Inst::pair<Interpreter::fmsubx>(),
+            Inst::pair<Interpreter::fmulx>(),
+            Inst::pair<Interpreter::fnmaddx>(),
+            Inst::pair<Interpreter::fnmsubx>(),
+            Inst::pair<Interpreter::frsqrtex>(),
+            Inst::pair<Interpreter::fselx>(),
+            Inst::pair<Interpreter::fsubx>(),
+            Inst::pair<Interpreter::addi>(),
+            Inst::pair<Interpreter::addic>(),
+            Inst::pair<Interpreter::addic_rc>(),
+            Inst::pair<Interpreter::addis>(),
+            Inst::pair<Interpreter::andi_rc>(),
+            Inst::pair<Interpreter::andis_rc>(),
+            Inst::pair<Interpreter::cmpi>(),
+            Inst::pair<Interpreter::cmpli>(),
+            Inst::pair<Interpreter::mulli>(),
+            Inst::pair<Interpreter::ori>(),
+            Inst::pair<Interpreter::oris>(),
+            Inst::pair<Interpreter::subfic>(),
+            Inst::pair<Interpreter::twi>(),
+            Inst::pair<Interpreter::xori>(),
+            Inst::pair<Interpreter::xoris>(),
+            Inst::pair<Interpreter::rlwimix>(),
+            Inst::pair<Interpreter::rlwinmx>(),
+            Inst::pair<Interpreter::rlwnmx>(),
+            Inst::pair<Interpreter::andx>(),
+            Inst::pair<Interpreter::andcx>(),
+            Inst::pair<Interpreter::cmp>(),
+            Inst::pair<Interpreter::cmpl>(),
+            Inst::pair<Interpreter::cntlzwx>(),
+            Inst::pair<Interpreter::eqvx>(),
+            Inst::pair<Interpreter::extsbx>(),
+            Inst::pair<Interpreter::extshx>(),
+            Inst::pair<Interpreter::nandx>(),
+            Inst::pair<Interpreter::norx>(),
+            Inst::pair<Interpreter::orx>(),
+            Inst::pair<Interpreter::orcx>(),
+            Inst::pair<Interpreter::slwx>(),
+            Inst::pair<Interpreter::srawx>(),
+            Inst::pair<Interpreter::srawix>(),
+            Inst::pair<Interpreter::srwx>(),
+            Inst::pair<Interpreter::tw>(),
+            Inst::pair<Interpreter::xorx>(),
+            Inst::pair<Interpreter::addx>(),
+            Inst::pair<Interpreter::addcx>(),
+            Inst::pair<Interpreter::addex>(),
+            Inst::pair<Interpreter::addmex>(),
+            Inst::pair<Interpreter::addzex>(),
+            Inst::pair<Interpreter::divwx>(),
+            Inst::pair<Interpreter::divwux>(),
+            Inst::pair<Interpreter::mulhwx>(),
+            Inst::pair<Interpreter::mulhwux>(),
+            Inst::pair<Interpreter::mullwx>(),
+            Inst::pair<Interpreter::negx>(),
+            Inst::pair<Interpreter::subfx>(),
+            Inst::pair<Interpreter::subfcx>(),
+            Inst::pair<Interpreter::subfex>(),
+            Inst::pair<Interpreter::subfmex>(),
+            Inst::pair<Interpreter::subfzex>(),
+    });
+    std::stable_sort(direct.begin(), direct.end());
+}
 
 ThreadedInterpreter::~ThreadedInterpreter() = default;
 
@@ -202,8 +298,8 @@ void ThreadedInterpreter::Jit(u32) {
 
         if (const auto result = HLE::TryReplaceFunction(m_ppc_symbol_db, op.address,
                                                         PowerPC::CoreMode::JIT)) {
-            inst.push_back({Inst::WritePC    , op.address});
-            inst.push_back({Inst::HLEFunction, result.hook_index});
+            inst.push_back({Inst::WritePC, op.address});
+            inst.push_back({Inst::Direct<Interpreter::HLEFunction>, result.hook_index});
 
             if (result.type == HLE::HookType::Replace) {
                 inst.push_back({Inst::EndBlock, js.downcountAmount});
@@ -228,8 +324,15 @@ void ThreadedInterpreter::Jit(u32) {
             if (check_fpu)  { inst.push_back({Inst::CheckFPU       , js.downcountAmount});
                               js.firstFPInstructionFound = true;                           }
 
-            // TODO: improve, obviously
-            inst.push_back({Inst::Interp, op.inst.hex});
+            Interpreter::Instruction io = Interpreter::GetInterpreterOp(op.inst);
+
+            auto lb = std::lower_bound(direct.begin(), direct.end(),
+                                       std::make_pair(io, decltype(Inst::fn){nullptr}));
+            if (lb != direct.end() && lb->first == io) {
+                inst.push_back({lb->second, op.inst.hex});
+            } else {
+                inst.push_back({Inst::Indirect, op.inst.hex, io});
+            }
 
             if (memcheck           ) { inst.push_back({Inst::CheckDSI , js.downcountAmount}); }
             if (check_pe           ) { inst.push_back({Inst::CheckPE  , js.downcountAmount}); }
