@@ -21,7 +21,7 @@ public:
   void Run() override;
   void Jit(u32) override;
 
-  JitBaseBlockCache* GetBlockCache() override { return &m_block_cache; }
+  JitBaseBlockCache* GetBlockCache() override { return &block_cache; }
   bool HandleFault(uintptr_t, SContext*) override { return false; }
   const char* GetName() const override { return "Threaded Interpreter"; }
   const CommonAsmRoutinesBase* GetAsmRoutines() override { return nullptr; }
@@ -29,6 +29,8 @@ public:
 private:
   struct Inst;
 
-  BlockCache m_block_cache;
-  std::vector<Inst> m_inst;
+  void ExecuteOneBlock();
+
+  BlockCache block_cache;
+  std::vector<Inst> inst;
 };
