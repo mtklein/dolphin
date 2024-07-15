@@ -21,6 +21,7 @@
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/PowerPC/ThreadedInterpreter.h"
 #include "Core/System.h"
 
 #ifdef _M_X86_64
@@ -64,6 +65,10 @@ CPUCoreBase* JitInterface::InitJitCore(PowerPC::CPUCore core)
 #endif
   case PowerPC::CPUCore::CachedInterpreter:
     m_jit = std::make_unique<CachedInterpreter>(m_system);
+    break;
+
+  case PowerPC::CPUCore::ThreadedInterpreter:
+    m_jit = std::make_unique<ThreadedInterpreter>(m_system);
     break;
 
   default:

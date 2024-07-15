@@ -531,6 +531,8 @@ add_library(core
   PowerPC/SignatureDB/MEGASignatureDB.h
   PowerPC/SignatureDB/SignatureDB.cpp
   PowerPC/SignatureDB/SignatureDB.h
+  PowerPC/ThreadedInterpreter.cpp
+  PowerPC/ThreadedInterpreter.h
   State.cpp
   State.h
   SyncIdentifier.h
